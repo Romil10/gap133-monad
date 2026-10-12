@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.*
+.vercel/
+public/gap133-game.mcpb
+extension/server/
+extension/icon.png

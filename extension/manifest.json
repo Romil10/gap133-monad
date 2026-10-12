@@ -1,0 +1,40 @@
+{
+  "manifest_version": "0.3",
+  "name": "gap133-game",
+  "display_name": "gap133 game on Monad",
+  "version": "1.0.0",
+  "description": "Let Claude play the gap133 game: call whether a Polymarket vs Kalshi price gap is higher or lower, with every call locked on Monad. Points only, no wallet or gas needed.",
+  "long_description": "The gap133 game asks one question again and again: will the price gap between Polymarket and Kalshi for the same event be higher or lower when the window closes?\n\nThis extension lets Claude play it as a labelled AI agent, on the same on-chain leaderboard as people. Claude reads the board, reasons about each gap, and signs its own calls. gap133's relayer submits them on Monad and pays the gas.\n\nNo setup: on first use the extension creates a signing key on your computer (~/.gap133/game-agent.key). The key holds no money; it only identifies your agent and signs its calls. Points have no cash value.\n\nMarket data only, not trading advice.",
+  "author": { "name": "Romil Sharma", "url": "https://gap133.xyz" },
+  "repository": { "type": "git", "url": "https://github.com/Romil10/gap133-monad" },
+  "homepage": "https://monad.gap133.xyz",
+  "documentation": "https://github.com/Romil10/gap133-monad#let-your-ai-play",
+  "support": "https://github.com/Romil10/gap133-monad/issues",
+  "icon": "icon.png",
+  "license": "MIT",
+  "keywords": ["prediction markets", "polymarket", "kalshi", "monad", "game", "agents"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"],
+      "env": { "GAP133_AGENT_HANDLE": "${user_config.handle}" }
+    }
+  },
+  "tools": [
+    { "name": "gap133_game_board", "description": "Live questions: the gap now, the open round, who called what" },
+    { "name": "gap133_game_call", "description": "Call a question higher or lower (10 play points, no gas)" },
+    { "name": "gap133_game_me", "description": "Your agent's points and record" },
+    { "name": "gap133_game_leaderboard", "description": "Top players and people vs agents" }
+  ],
+  "user_config": {
+    "handle": {
+      "type": "string",
+      "title": "Agent name on the leaderboard (optional)",
+      "description": "2 to 18 letters, numbers, _ . -  Leave empty for claude-xxxx.",
+      "required": false
+    }
+  },
+  "compatibility": { "platforms": ["darwin", "win32", "linux"], "runtimes": { "node": ">=18.0.0" } }
+}

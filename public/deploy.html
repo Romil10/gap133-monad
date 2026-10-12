@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy · gap133 game on Monad</title><meta name="robots" content="noindex">
+<style>
+  body { margin:0; background:#0b0b10; color:#ecebf5; font:15px/1.6 ui-monospace, Menlo, monospace; }
+  .wrap { max-width:760px; margin:0 auto; padding:40px 24px; }
+  button { font:inherit; font-weight:700; border:1px solid #ecebf5; background:#ecebf5; color:#0b0b10; padding:10px 14px; cursor:pointer; margin:6px 8px 6px 0; }
+  button:disabled { opacity:.4; } li { margin:8px 0; } #out { margin-top:16px; word-break:break-all; } .err { color:#ff5d5d; } code { color:#C6F211; }
+</style>
+</head>
+<body><div class="wrap">
+  <h1>Deploy the game contract</h1>
+  <p>One transaction from your own wallet. The operator address (which opens rounds, posts results and relays signed calls) is read from this deployment's <code>/api/info</code>, so <code>SERVICE_SECRET</code> must already be set.</p>
+  <ol>
+    <li><b>Mainnet, points mode:</b> switch your wallet to Monad (chain 143). Stake is 10 points per call. This is the live game.</li>
+    <li><b>Testnet, staked mode (design demo):</b> switch your wallet to Monad Testnet (chain 10143). Stake is 0.01 testnet MON per call, paid by the player. Never deploy this mode on mainnet.</li>
+    <li>After it confirms, set <code>GAME_CONTRACT</code> in Vercel and redeploy. Then send a little MON to the operator address shown below so it can pay players' gas.</li>
+  </ol>
+  <button id="points">Deploy points mode (mainnet)</button><button id="staked">Deploy staked mode (testnet only)</button>
+  <div id="out"></div>
+</div>
+<script>
+const out = (h, err) => { const el = document.getElementById('out'); el.innerHTML = h; el.className = err ? 'err' : ''; };
+const pad = (hex) => hex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+async function deploy(staked) {
+  try {
+    const info = await (await fetch('/api/info')).json();
+    if (!info.operator) throw new Error('Service not configured: set SERVICE_SECRET first.');
+    const eth = window.ethereum; if (!eth) throw new Error('No wallet found.');
+    const [from] = await eth.request({ method: 'eth_requestAccounts' });
+    const chain = parseInt(await eth.request({ method: 'eth_chainId' }), 16);
+    if (staked && chain !== 10143) throw new Error('Staked mode is testnet only. Switch your wallet to Monad Testnet (10143).');
+    if (!staked && chain !== 143) throw new Error('Switch your wallet to Monad mainnet (143) for the points game.');
+    const art = await (await fetch('/contract.json')).json();
+    const stake = staked ? 10n ** 16n : 10n;
+    const data = art.bytecode + pad(info.operator) + pad(staked ? '1' : '0') + pad(stake.toString(16));
+    out('Approve the deployment in your wallet. Operator: ' + info.operator);
+    const hash = await eth.request({ method: 'eth_sendTransaction', params: [{ from, data }] });
+    out('Sent ' + hash + '. Waiting…');
+    let r = null;
+    for (let i = 0; i < 60 && !r; i++) { r = await eth.request({ method: 'eth_getTransactionReceipt', params: [hash] }); if (!r) await new Promise((s) => setTimeout(s, 1000)); }
+    if (!r || r.status !== '0x1') throw new Error('Deployment failed or not confirmed: ' + hash);
+    out(`<b>Deployed (${staked ? 'staked, testnet' : 'points, mainnet'}).</b><br>Contract: <b>${r.contractAddress}</b><br><br>Next: set <code>GAME_CONTRACT</code> = ${r.contractAddress} in Vercel and redeploy.<br>Fund the operator with a little MON: <b>${info.operator}</b>`);
+  } catch (e) { out(e.message || String(e), true); }
+}
+document.getElementById('points').onclick = () => deploy(false);
+document.getElementById('staked').onclick = () => deploy(true);
+</script></body></html>

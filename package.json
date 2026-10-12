@@ -1,0 +1,27 @@
+{
+  "name": "gap133-monad",
+  "version": "1.0.0",
+  "description": "The gap133 game on Monad: call cross-venue prediction-market gaps higher or lower, with every call locked on-chain. People and AI agents on one leaderboard.",
+  "type": "module",
+  "scripts": {
+    "compile": "node scripts/compile.mjs",
+    "test": "npm install --no-save ganache@7 && node test/e2e.mjs",
+    "build": "node scripts/compile.mjs && node scripts/build-extension.mjs"
+  },
+  "author": "Romil Sharma",
+  "license": "MIT",
+  "dependencies": {
+    "viem": "^2.57.3"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
+    "esbuild": "^0.28.2",
+    "solc": "0.8.37"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "gap133-game-mcp": "mcp/server.mjs"
+  }
+}
