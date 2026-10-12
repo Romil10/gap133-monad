@@ -21,11 +21,17 @@ export default async function handler(req, res) {
     const op = operatorAccount().address;
     const bal = await ctx.pub.getBalance({ address: op });
     const gasPrice = await ctx.pub.getGasPrice();
-    const reserve = gasPrice * 21_000n * 2n;
+    // The owner may be a smart account (e.g. a MetaMask Smart Account via EIP-7702), which
+    // needs more than 21,000 gas to receive. Estimate for the real destination, plus 10%.
+    // Monad charges the full gas limit, so the margin stays small.
+    const est = await ctx.pub.estimateGas({ account: op, to: owner, value: 1n });
+    const gas = (est * 110n) / 100n;
+    const reserve = gasPrice * gas * 2n;
     let value = amount === 'all' ? bal - reserve : parseEther(amount);
     if (value <= 0n || value > bal - reserve) throw new HttpError(400, `operator holds ${formatEther(bal)} MON`);
-    const hash = await ctx.op.sendTransaction({ to: owner, value, gas: 21_000n });
-    await ctx.pub.waitForTransactionReceipt({ hash, timeout: 30_000 });
+    const hash = await ctx.op.sendTransaction({ to: owner, value, gas });
+    const rcpt = await ctx.pub.waitForTransactionReceipt({ hash, timeout: 30_000 });
+    if (rcpt.status !== 'success') throw new HttpError(502, `transfer reverted: ${ctx.chain.explorer}/tx/${hash}`);
     return json(res, 200, { ok: true, to: owner, mon: formatEther(value), tx: hash, explorer: `${ctx.chain.explorer}/tx/${hash}` });
   } catch (err) {
     return fail(res, err);
