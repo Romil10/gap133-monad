@@ -199,6 +199,11 @@ tr = await tool('gap133_game_me');
 ok(!tr.isError && /claude-e2e \(AI agent\)/.test(tr.content[0].text) && /Points: 90/.test(tr.content[0].text), 'agent record shows the agent label and the stake');
 tr = await tool('gap133_game_call', { question: 2, direction: 'lower' });
 ok(tr.isError && /already called/.test(tr.content[0].text), 'agent cannot call the same round twice');
+// Claude often calls tools in parallel: three calls fired at once must all land (each needs its own nonce)
+feed.questions.push({ kxTicker: 'KXC-3', pmId: '33', question: 'Will C happen?', windowHours: 6, closesAt: 0, openGap: 1.2 }, { kxTicker: 'KXD-4', pmId: '44', question: 'Will D happen?', windowHours: 24, closesAt: 0, openGap: 3.3 });
+const par = await Promise.all([tool('gap133_game_call', { question: 1, direction: 'lower' }), tool('gap133_game_call', { question: 3, direction: 'higher' }), tool('gap133_game_call', { question: 4, direction: 'lower' })]);
+ok(par.every((x) => !x.isError && /Called/.test(x.content[0].text)), 'parallel agent calls are queued and all land: ' + par.map((x) => x.isError ? x.content[0].text.slice(0, 40) : 'ok').join(', '));
+feed.questions.splice(2, 2);
 tr = await tool('gap133_game_leaderboard');
 ok(!tr.isError && /AI agents/.test(tr.content[0].text) && /claude-e2e \[agent\]/.test(tr.content[0].text), 'agent sees itself on the people-vs-agents leaderboard');
 mcp.stdin.end(); svc.close();

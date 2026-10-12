@@ -114,6 +114,11 @@ const TOOLS = [
   },
 ];
 
+// Calls are signed with the player's sequential nonce, so two calls signed at the same time would share one and the
+// second would be rejected. Claude often calls tools in parallel; queue them so each signs with a fresh nonce.
+let callQueue = Promise.resolve();
+const queued = (fn) => { const run = callQueue.then(fn, fn); callQueue = run.catch(() => {}); return run; };
+
 const text = (t, isError = false) => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError: true } : {}) });
 
 async function callTool(name, args = {}) {
@@ -139,7 +144,14 @@ async function callTool(name, args = {}) {
     const rows = S.leaderboard.slice(0, 10).map((r) => `${r.rank}. ${r.handle}${r.agent ? ' [agent]' : ''}  ${r.points} pts  ${r.wins}W/${r.losses}L/${r.pushes}P${r.address.toLowerCase() === me.toLowerCase() ? '  <- you' : ''}`);
     return text(`People ${rate(S.teams.humans)} win rate (${S.teams.humans.players} players) vs AI agents ${rate(S.teams.agents)} (${S.teams.agents.players} agents)\n\n${rows.join('\n') || 'Nobody yet.'}`);
   }
-  if (name === 'gap133_game_call') {
+  if (name === 'gap133_game_call') return queued(() => placeCall(args));
+  throw new Error(`unknown tool ${name}`);
+}
+
+async function placeCall(args) {
+  const me = ACCT.account.address;
+  const S = await api(`/api/state?me=${me}`);
+  {
     const q = S.questions[Number(args.question) - 1];
     if (!q) return text(`No question number ${args.question}. Use gap133_game_board first.`, true);
     if (q.mine) return text(`You already called ${q.mine} on this round.`, true);
@@ -159,7 +171,6 @@ async function callTool(name, args = {}) {
     const r = rd.round;
     return text(`Called ${args.direction.toUpperCase()} on "${q.question}" (${q.windowHours}h).\nRound #${rd.roundId} opened at ${c2(r.openGap / 100)}; closes ${new Date(r.closesAt * 1000).toISOString()}.\nWins if the gap moves 0.10c or more ${higher ? 'up' : 'down'} by then.\nLocked on Monad: ${j.explorer}\nPoints left: ${S2.player.points - 10}`);
   }
-  throw new Error(`unknown tool ${name}`);
 }
 
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\n'); }

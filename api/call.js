@@ -16,9 +16,7 @@ export default async function handler(req, res) {
     if (!p.joined) throw new HttpError(400, 'NotJoined');
     if (p.points < 10) throw new HttpError(400, 'NotEnoughPoints');
     const { hash } = await opWrite(ctx, 'callFor', [getAddress(b.player), BigInt(b.roundId), !!b.higher, BigInt(b.deadline), b.sig]);
-    let settled = [];
-    try { settled = await settleDue(ctx, 3_000); } catch {}
-    return json(res, 200, { ok: true, tx: hash, explorer: `${ctx.chain.explorer}/tx/${hash}`, settled });
+    return json(res, 200, { ok: true, tx: hash, explorer: `${ctx.chain.explorer}/tx/${hash}` });
   } catch (err) {
     return fail(res, err);
   }
