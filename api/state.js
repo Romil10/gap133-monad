@@ -2,6 +2,17 @@ import { clients, gameAddress, board, leaderboard, readPlayer, chainNow, operato
 import { formatEther, isAddress, getAddress } from 'viem';
 
 // Everything the game page and the agent tools need, read live from Monad.
+// Shared part of the state (board without "mine", leaderboard, balance) is cached briefly per instance.
+let cache = { at: 0, data: null, pending: null };
+async function shared(ctx, game) {
+  if (cache.data && Date.now() - cache.at < Number(process.env.STATE_TTL_MS ?? 6_000)) return cache.data;
+  if (cache.pending) return cache.pending;
+  cache.pending = Promise.all([board(ctx.pub, game, null), leaderboard(ctx.pub, game), operatorFunded(ctx.pub), chainNow(ctx.pub)])
+    .then((d) => { cache = { at: Date.now(), data: d, pending: null }; return d; })
+    .catch((e) => { cache.pending = null; if (cache.data) return cache.data; throw e; });
+  return cache.pending;
+}
+
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, 'http://x');
@@ -9,7 +20,13 @@ export default async function handler(req, res) {
     const me = meParam && isAddress(meParam) ? getAddress(meParam) : null;
     const ctx = clients();
     const game = gameAddress();
-    const [questions, rows, funded, now] = await Promise.all([board(ctx.pub, game, me), leaderboard(ctx.pub, game), operatorFunded(ctx.pub), chainNow(ctx.pub)]);
+    const [baseQ, rows, funded, now] = await shared(ctx, game);
+    let questions = baseQ;
+    if (me) {
+      // only the player's own entries are read per request (one multicall)
+      const mine = await Promise.all(baseQ.map((q) => q.round ? ctx.pub.readContract({ address: game, abi: ABI, functionName: 'entries', args: [BigInt(q.round.id), me] }) : null));
+      questions = baseQ.map((q, i) => ({ ...q, mine: mine[i] && mine[i][0] ? (mine[i][0] === 1 ? 'higher' : 'lower') : null }));
+    }
     let player = null;
     if (me) {
       player = await readPlayer(ctx.pub, game, me);

@@ -49,10 +49,13 @@ try { ACCT = loadAccount(); } catch (e) { keyError = e.message; }
 const handleFor = (addr) => env('GAP133_AGENT_HANDLE', 'claude-' + addr.slice(-4).toLowerCase()).replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 18);
 
 async function api(path, body) {
-  const r = await fetch(SERVICE + path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `request failed with ${r.status}`);
-  return j;
+  for (let i = 0; ; i++) {
+    const r = await fetch(SERVICE + path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return j;
+    if ((r.status === 503 || r.status === 500) && i < 3 && !/sponsored gas/.test(j.error || '')) { await new Promise((res) => setTimeout(res, 900 * (i + 1))); continue; }
+    throw new Error(j.error || `request failed with ${r.status}`);
+  }
 }
 
 const DOMAIN = (S) => ({ name: 'gap133 game', version: '1', chainId: S.chain.id, verifyingContract: S.contract });

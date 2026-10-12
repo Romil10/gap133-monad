@@ -130,13 +130,30 @@ function left(closesAt) {
   return h ? `${h}h ${m}m left` : `${m}m left`;
 }
 
-async function load() {
+async function load(retry = 0) {
   try {
     const r = await fetch('/api/state' + (me ? `?me=${me}` : ''), { cache: 'no-store' });
-    S = await r.json();
-    if (!r.ok) throw new Error(S.error);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'service unavailable');
+    S = j;
     render();
-  } catch (e) { $('board').innerHTML = `<p class="status err">${esc(e.message || 'service unreachable')}</p>`; }
+    return S;
+  } catch (e) {
+    // keep showing the last good board; retry quietly with backoff
+    if (retry < 3) { await new Promise((res) => setTimeout(res, 800 * (retry + 1))); return load(retry + 1); }
+    if (!S) $('board').innerHTML = '<p class="status err">Monad RPC is busy. Retrying in a few seconds…</p>';
+    setTimeout(() => load(), 5000);
+    return S;
+  }
+}
+async function fresh() {
+  for (let i = 0; i < 4; i++) {
+    const r = await fetch(`/api/state?me=${me}`, { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.chain) { S = j; return j; }
+    await new Promise((res) => setTimeout(res, 700 * (i + 1)));
+  }
+  throw new Error('Monad RPC is busy. Please try again in a moment.');
 }
 
 function rate(t) { const n = t.wins + t.losses; return n ? Math.round((100 * t.wins) / n) + '%' : '–'; }
@@ -175,6 +192,7 @@ function render() {
 }
 
 async function ensureChain() {
+  if (!S || !S.chain) await fresh();
   const eth = window.ethereum;
   if (!eth) throw new Error('No wallet found. Install MetaMask (or any EVM wallet), then reload.');
   const hex = '0x' + S.chain.id.toString(16);
@@ -194,7 +212,7 @@ function typed(primaryType, fields, message) {
   });
 }
 const sign = (data) => window.ethereum.request({ method: 'eth_signTypedData_v4', params: [me, data] });
-const post = async (path, body) => { const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; };
+const post = async (path, body) => { for (let i = 0; ; i++) { const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (r.ok) return j; if (r.status === 503 && /busy/.test(j.error || '') && i < 3) { await new Promise((res) => setTimeout(res, 900 * (i + 1))); continue; } throw new Error(j.error || r.status); } };
 const friendly = (m) => ({ NotEnoughPoints: 'Not enough points for that call.', AlreadyCalled: 'You already called this round.', RoundClosed: 'That round just closed.', NotJoined: 'Join first.', AlreadyJoined: 'This wallet already joined.', BadSignature: 'The signature did not match. Try again.' }[m] || m);
 
 $('connect').onclick = async () => {
@@ -210,10 +228,13 @@ $('join').onclick = async () => {
   const handle = $('handle').value.trim();
   if (!/^[A-Za-z0-9_.-]{2,18}$/.test(handle)) return say('Handle: 2 to 18 letters, numbers, _ . -', true);
   try {
-    busy = true; await ensureChain();
-    const deadline = (S.chainTime || Math.floor(Date.now() / 1000)) + 600;
+    busy = true;
+    const st = await fresh();
+    if (st.player?.joined) { say('This wallet already joined.'); render(); return; }
+    await ensureChain();
+    const deadline = (st.chainTime || Math.floor(Date.now() / 1000)) + 600;
     say('Sign the join message in your wallet. It costs nothing.');
-    const sig = await sign(typed('Join', [{ name: 'player', type: 'address' }, { name: 'handle', type: 'string' }, { name: 'agent', type: 'bool' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }], { player: me, handle, agent: false, nonce: S.player.nonce, deadline }));
+    const sig = await sign(typed('Join', [{ name: 'player', type: 'address' }, { name: 'handle', type: 'string' }, { name: 'agent', type: 'bool' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }], { player: me, handle, agent: false, nonce: st.player?.nonce ?? 0, deadline }));
     say('Joining on Monad…');
     const j = await post('/api/join', { player: me, handle, agent: false, deadline, sig });
     say('Joined with 100 points. Transaction: ' + j.tx.slice(0, 12) + '…');
@@ -222,16 +243,17 @@ $('join').onclick = async () => {
 };
 
 async function place(q, higher) {
+  if (!S) return say('Still loading the board. One moment.', true);
   if (!me) return say('Connect a wallet first.', true);
   if (!S.player?.joined) return say('Join first: pick a handle above.', true);
   try {
     busy = true; render(); await ensureChain();
     say('Opening the round on Monad…');
     const rd = await post('/api/round', { key: q.key });
-    const fresh = await (await fetch(`/api/state?me=${me}`, { cache: 'no-store' })).json();
-    const deadline = (fresh.chainTime || Math.floor(Date.now() / 1000)) + 600;
+    const st = await fresh();
+    const deadline = (st.chainTime || Math.floor(Date.now() / 1000)) + 600;
     say(`Sign your call: ${higher ? 'higher' : 'lower'}. It costs nothing.`);
-    const sig = await sign(typed('Call', [{ name: 'player', type: 'address' }, { name: 'roundId', type: 'uint256' }, { name: 'higher', type: 'bool' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }], { player: me, roundId: rd.roundId, higher, nonce: fresh.player.nonce, deadline }));
+    const sig = await sign(typed('Call', [{ name: 'player', type: 'address' }, { name: 'roundId', type: 'uint256' }, { name: 'higher', type: 'bool' }, { name: 'nonce', type: 'uint256' }, { name: 'deadline', type: 'uint256' }], { player: me, roundId: rd.roundId, higher, nonce: st.player.nonce, deadline }));
     say('Locking your call on Monad…');
     const j = await post('/api/call', { player: me, roundId: rd.roundId, higher, deadline, sig });
     say(`Call locked in round #${rd.roundId}. `);

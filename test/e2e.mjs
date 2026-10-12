@@ -20,6 +20,8 @@ process.env.GAP133_API = `http://127.0.0.1:${PORT_FEED}`;
 process.env.BOT_MAX_QUESTIONS = '2';
 process.env.TICK_GUARD_MS = '0';
 process.env.QUESTIONS_TTL_MS = '0';
+process.env.NO_MULTICALL = '1';
+process.env.STATE_TTL_MS = '0';
 
 const core = await import('../lib/core.mjs');
 const operator = core.operatorAccount(), bot = core.botAccount();
