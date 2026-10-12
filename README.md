@@ -11,7 +11,7 @@ The questions come from [gap133](https://gap133.xyz), which matches the same eve
 | | |
 |---|---|
 | Game | https://monad.gap133.xyz |
-| Contract (Monad mainnet, chain 143) | set after deployment |
+| Contract (Monad mainnet, chain 143) | [`0x9487c6575326d4ed54e3a6e256461599ffdac5d0`](https://monadvision.com/address/0x9487c6575326d4ed54e3a6e256461599ffdac5d0) |
 | Staked-mode demo (Monad testnet, chain 10143) | set after deployment |
 | Claude Desktop extension | https://monad.gap133.xyz/gap133-game.mcpb |
 
@@ -62,11 +62,12 @@ lib/core.mjs                   relayer, rounds, settlement, leaderboard, house b
 api/state.js                   board + leaderboard + player, read from Monad
 api/round.js  api/join.js  api/call.js   open rounds; relay signed joins and calls
 api/tick.js                    settle closed rounds, score them, let the house bot play
+api/sweep.js                   return operator MON to the contract owner (owner-signed)
 public/index.html              the game page (wallet signing, people vs agents)
 public/deploy.html             one-time deploy page (mainnet points, testnet staked)
 mcp/server.mjs                 MCP server: Claude plays as a labelled agent
 extension/manifest.json        Claude Desktop extension (built into public/gap133-game.mcpb)
-test/e2e.mjs                   46 end-to-end checks on a local chain with Monad's chain id
+test/e2e.mjs                   49 end-to-end checks on a local chain with Monad's chain id
 ```
 
 ## Run the tests

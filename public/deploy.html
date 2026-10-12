@@ -20,6 +20,10 @@
   </ol>
   <button id="points">Deploy points mode (mainnet)</button><button id="staked">Deploy staked mode (testnet only)</button>
   <div id="out"></div>
+  <h2 style="margin-top:36px">Return operator MON</h2>
+  <p>Sends MON from the operator wallet back to the contract owner (your wallet). You sign a message to prove you are the owner; it costs nothing. The destination is always the owner recorded in the contract.</p>
+  <div><input id="amt" placeholder="amount in MON, or all" style="font:inherit;padding:9px;background:#13131b;color:#ecebf5;border:1px solid #26263a"> <button id="sweep">Return to my wallet</button></div>
+  <div id="sout"></div>
 </div>
 <script>
 const out = (h, err) => { const el = document.getElementById('out'); el.innerHTML = h; el.className = err ? 'err' : ''; };
@@ -45,6 +49,20 @@ async function deploy(staked) {
     out(`<b>Deployed (${staked ? 'staked, testnet' : 'points, mainnet'}).</b><br>Contract: <b>${r.contractAddress}</b><br><br>Next: set <code>GAME_CONTRACT</code> = ${r.contractAddress} in Vercel and redeploy.<br>Fund the operator with a little MON: <b>${info.operator}</b>`);
   } catch (e) { out(e.message || String(e), true); }
 }
+document.getElementById('sweep').onclick = async () => {
+  const o = document.getElementById('sout');
+  try {
+    const eth = window.ethereum; const [from] = await eth.request({ method: 'eth_requestAccounts' });
+    const amount = (document.getElementById('amt').value || 'all').trim();
+    const deadline = Math.floor(Date.now() / 1000) + 300;
+    const message = `gap133-monad: return ${amount} operator MON to the contract owner. Valid until ${deadline}.`;
+    o.textContent = 'Sign the message in your wallet (free)…';
+    const sig = await eth.request({ method: 'personal_sign', params: [message, from] });
+    const r = await fetch('/api/sweep', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ amount, deadline, sig }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    o.innerHTML = `Returned <b>${j.mon} MON</b> to ${j.to}. <a style="color:#C6F211" href="${j.explorer}" target="_blank" rel="noopener noreferrer">View transaction</a>`;
+  } catch (e) { o.textContent = e.message || String(e); o.className = 'err'; }
+};
 document.getElementById('points').onclick = () => deploy(false);
 document.getElementById('staked').onclick = () => deploy(true);
 </script></body></html>

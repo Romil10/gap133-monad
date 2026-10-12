@@ -61,7 +61,7 @@ function call(handler, method, url, body) {
   });
 }
 const H = {};
-for (const n of ['state', 'join', 'round', 'call', 'tick', 'info']) H[n] = (await import(`../api/${n}.js`)).default;
+for (const n of ['state', 'join', 'round', 'call', 'tick', 'info', 'sweep']) H[n] = (await import(`../api/${n}.js`)).default;
 
 // ---------------------------------------------------------------- deploy (points mode)
 let r = await call(H.info, 'GET', '/api/info');
@@ -200,6 +200,18 @@ ok(tr.isError && /already called/.test(tr.content[0].text), 'agent cannot call t
 tr = await tool('gap133_game_leaderboard');
 ok(!tr.isError && /AI agents/.test(tr.content[0].text) && /claude-e2e \[agent\]/.test(tr.content[0].text), 'agent sees itself on the people-vs-agents leaderboard');
 mcp.stdin.end(); svc.close();
+
+// ---------------------------------------------------------------- returning operator MON
+const { sweepMessage } = await import('../api/sweep.js');
+const sweepReq = async (acct, amount) => { const dl = Math.floor(Date.now() / 1000) + 300; return { amount, deadline: dl, sig: await acct.signMessage({ message: sweepMessage(dl, amount) }) }; };
+r = await call(H.sweep, 'POST', '/api/sweep', await sweepReq(alice, 'all'));
+ok(r.status === 403, 'only the contract owner can pull MON out of the operator wallet');
+const ownerBefore = await pub.getBalance({ address: dep.account.address });
+r = await call(H.sweep, 'POST', '/api/sweep', await sweepReq(dep.account, '5'));
+ok(r.status === 200 && r.body.mon === '5' && getAddress(r.body.to) === dep.account.address && (await pub.getBalance({ address: dep.account.address })) - ownerBefore === parseEther('5'), 'owner gets operator MON back, sent to the owner recorded in the contract');
+const reused = await sweepReq(dep.account, '1'); reused.amount = '40';
+r = await call(H.sweep, 'POST', '/api/sweep', reused);
+ok(r.status === 403, 'a signed sweep cannot be altered');
 
 // ---------------------------------------------------------------- staked mode (testnet design)
 const stakeWei = parseEther('0.1');
