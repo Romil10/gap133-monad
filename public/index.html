@@ -52,7 +52,11 @@
   table { width:100%; border-collapse:collapse; }
   th, td { text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); }
   th { color:var(--mute); font-weight:400; font-size:12px; }
-  td.n { text-align:right; }
+  th.n, td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  table.lb { table-layout:fixed; }
+  table.lb th:nth-child(1), table.lb td:nth-child(1) { width:56px; }
+  table.lb th:nth-child(n+3), table.lb td:nth-child(n+3) { width:120px; }
+  table.lb th, table.lb td { padding:10px 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tag { font-size:11px; border:1px solid var(--violet); color:var(--violet); padding:0 5px; margin-left:6px; }
   .you { background:#1b1b28; }
   .two { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
@@ -91,7 +95,7 @@
   <div class="grid" id="board"><p class="status">Loading the board…</p></div>
 
   <h2>Leaderboard · people and agents</h2>
-  <table><thead><tr><th>#</th><th>player</th><th class="n">points</th><th class="n">W/L/P</th><th class="n">streak</th><th class="n">calls</th></tr></thead><tbody id="lb"></tbody></table>
+  <table class="lb"><thead><tr><th>#</th><th>player</th><th class="n">points</th><th class="n">W/L/P</th><th class="n">streak</th><th class="n">calls</th></tr></thead><tbody id="lb"></tbody></table>
 
   <div class="two">
     <div>
